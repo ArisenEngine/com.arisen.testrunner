@@ -1,0 +1,20 @@
+{
+  "id": "com.arisen.testrunner",
+  "name": "Arisen Test Runner",
+  "version": "1.0.0",
+  "description": "Core testing infrastructure for Arisen Engine packages.",
+  "author": "Arisen Team",
+  "entry": {
+    "assembly": "Com.Arisen.TestRunner.dll",
+    "class": "ArisenEngine.Testing.TestRunnerPackage"
+  },
+  "services": {
+    "provides": [
+      { "interface": "ArisenEngine.Testing.ITestRunner", "priority": 100 },
+      { "interface": "ArisenEngine.Core.Lifecycle.IApplicationHost", "priority": 200 }
+    ]
+  },
+  "dependencies": {
+    "com.arisen.core": "1.0.0"
+  }
+}
