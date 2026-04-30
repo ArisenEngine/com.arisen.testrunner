@@ -151,7 +151,12 @@ public class TestRunnerHost : IApplicationHost
 
         KernelLog.Info($"[TestRunnerHost] Execution complete. Exit Code: {(success ? 0 : 1)}");
         
-        // In a real engine, we'd trigger a clean shutdown here.
+        // B13: Perform clean engine shutdown before process exit
+        if (ArisenKernel.Lifecycle.EngineKernel.IsCreated)
+        {
+            ArisenKernel.Lifecycle.EngineKernel.Instance.Shutdown();
+        }
+
         Environment.Exit(success ? 0 : 1);
     }
 }
