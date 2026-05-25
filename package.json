@@ -2,6 +2,7 @@
   "id": "com.arisen.testrunner",
   "name": "Arisen Test Runner",
   "version": "1.0.0",
+  "layer": "test",
   "author": "Arisen Team",
   "description": "Core testing infrastructure for Arisen Engine packages.",
   "entry": {
@@ -15,7 +16,7 @@
         "priority": 100
       },
       {
-        "interface": "ArisenEngine.Core.Lifecycle.IApplicationHost",
+        "interface": "ArisenKernel.Contracts.IApplicationHost",
         "priority": 200
       }
     ]
