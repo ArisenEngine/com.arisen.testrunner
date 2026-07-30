@@ -257,6 +257,8 @@ public class TestRunnerHost : IApplicationHost
 {
     private readonly IServiceRegistry _services;
 
+    public bool RequiresEngineInitialization => false;
+
     public TestRunnerHost(IServiceRegistry services)
     {
         _services = services;
