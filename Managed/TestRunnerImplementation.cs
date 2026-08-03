@@ -15,10 +15,17 @@ namespace ArisenEngine.Testing;
 
 public class TestRunnerService : ITestRunner
 {
-    private readonly Dictionary<string, Action> _nativeTests = new();
+    private readonly Dictionary<string, Func<bool>> _nativeTests = new();
     private readonly HashSet<string> _discoveredNativeTestEntries = new(StringComparer.OrdinalIgnoreCase);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void RegisterCallback(string name, IntPtr actionPtr);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    private delegate bool NativeTestCallback();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate void NativeRegisterFunc(RegisterCallback callback);
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
@@ -27,7 +34,7 @@ public class TestRunnerService : ITestRunner
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr GetProcAddress(IntPtr hModule, string procedureName);
 
-    public bool RunAll()
+    public bool RunAll(string? filter = null)
     {
         // Discover Native Tests first
         DiscoverNativeTests();
@@ -35,6 +42,7 @@ public class TestRunnerService : ITestRunner
         KernelLog.Info("[TestRunner] Starting Global Test Run...");
         int passed = 0;
         int failed = 0;
+        int selected = 0;
 
         // 1. Managed Test Discovery
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -53,6 +61,8 @@ public class TestRunnerService : ITestRunner
             {
                 var attr = (ArisenTestAttribute)method.GetCustomAttribute(typeof(ArisenTestAttribute))!;
                 string testName = $"{method.DeclaringType?.Name}.{method.Name}";
+                if (!MatchesFilter(testName, filter)) continue;
+                selected++;
                 
                 KernelLog.Info($"[TestRunner] Running Managed Test: {testName} - {attr.Description}");
 
@@ -81,12 +91,21 @@ public class TestRunnerService : ITestRunner
         // 2. Native Test Execution
         foreach (var nativeTest in _nativeTests)
         {
+            if (!MatchesFilter(nativeTest.Key, filter)) continue;
+            selected++;
             KernelLog.Info($"[TestRunner] Running Native Test: {nativeTest.Key}");
             try
             {
-                nativeTest.Value.Invoke();
-                passed++;
-                KernelLog.Info($"[TestRunner] [PASS] {nativeTest.Key}");
+                if (nativeTest.Value.Invoke())
+                {
+                    passed++;
+                    KernelLog.Info($"[TestRunner] [PASS] {nativeTest.Key}");
+                }
+                else
+                {
+                    failed++;
+                    KernelLog.Error($"[TestRunner] [FAIL] {nativeTest.Key}: Native test reported failure");
+                }
             }
             catch (Exception ex)
             {
@@ -95,11 +114,17 @@ public class TestRunnerService : ITestRunner
             }
         }
 
-        KernelLog.Info($"[TestRunner] Test Run Finished. Passed: {passed}, Failed: {failed}");
+        if (selected == 0)
+        {
+            KernelLog.Error($"[TestRunner] No tests matched filter '{filter}'.");
+            return false;
+        }
+
+        KernelLog.Info($"[TestRunner] Test Run Finished. Selected: {selected}, Passed: {passed}, Failed: {failed}");
         return failed == 0;
     }
 
-    public void RegisterNativeTest(string name, Action action)
+    public void RegisterNativeTest(string name, Func<bool> action)
     {
         _nativeTests[name] = action;
         KernelLog.Info($"[TestRunner] Registered Native Test: {name}");
@@ -177,8 +202,8 @@ public class TestRunnerService : ITestRunner
 
         RegisterCallback callback = (name, actionPtr) =>
         {
-            var action = Marshal.GetDelegateForFunctionPointer<Action>(actionPtr);
-            RegisterNativeTest(name, action);
+            var action = Marshal.GetDelegateForFunctionPointer<NativeTestCallback>(actionPtr);
+            RegisterNativeTest(name, action.Invoke);
         };
 
         try
@@ -198,6 +223,12 @@ public class TestRunnerService : ITestRunner
     {
         RegisterNativeTest(name, () => throw new InvalidOperationException(message));
         KernelLog.Warning($"[TestRunner] {message}");
+    }
+
+    private static bool MatchesFilter(string testName, string? filter)
+    {
+        return string.IsNullOrWhiteSpace(filter) ||
+            testName.Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<NativeTestDeclaration> EnumerateNativeTests(ResolvedPackage package)
@@ -267,9 +298,10 @@ public class TestRunnerHost : IApplicationHost
     public void Run(string[] args)
     {
         KernelLog.Info("[TestRunnerHost] Identifying Testing Profile... Hand-off successful.");
-        
+
+        string? filter = ReadOption(args, "--test-filter");
         var runner = _services.GetService<ITestRunner>();
-        bool success = runner.RunAll();
+        bool success = runner.RunAll(filter);
 
         KernelLog.Info($"[TestRunnerHost] Execution complete. Exit Code: {(success ? 0 : 1)}");
         
@@ -280,6 +312,26 @@ public class TestRunnerHost : IApplicationHost
         }
 
         Environment.Exit(success ? 0 : 1);
+    }
+
+    private static string? ReadOption(string[] args, string option)
+    {
+        for (int index = 0; index < args.Length; index++)
+        {
+            string argument = args[index];
+            if (string.Equals(argument, option, StringComparison.OrdinalIgnoreCase))
+            {
+                return index + 1 < args.Length ? args[index + 1] : string.Empty;
+            }
+
+            string prefix = option + "=";
+            if (argument.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return argument[prefix.Length..];
+            }
+        }
+
+        return null;
     }
 }
 

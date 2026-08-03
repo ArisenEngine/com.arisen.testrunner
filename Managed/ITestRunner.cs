@@ -11,10 +11,10 @@ public interface ITestRunner
     /// Executes all discovered tests in the loaded packages.
     /// </summary>
     /// <returns>True if all tests passed, false otherwise.</returns>
-    bool RunAll();
+    bool RunAll(string? filter = null);
 
     /// <summary>
     /// Registers a manual test execution node (e.g. for native tests).
     /// </summary>
-    void RegisterNativeTest(string name, Action action);
+    void RegisterNativeTest(string name, Func<bool> action);
 }

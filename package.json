@@ -2,6 +2,9 @@
   "id": "com.arisen.testrunner",
   "name": "Arisen Test Runner",
   "version": "1.0.0",
+  "engine": {
+    "minVersion": "0.1.0"
+  },
   "layer": "test",
   "author": "Arisen Team",
   "description": "Core testing infrastructure for Arisen Engine packages.",
